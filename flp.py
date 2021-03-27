@@ -56,8 +56,12 @@ def solve_flp(instance_name, linear):
     model.t = pyo.Param(model.I, model.J, initialize=travel_cost, default=0)
 
     # Variables
-    model.x = pyo.Var(model.I, model.J, domain=pyo.PositiveIntegers)
-    model.y = pyo.Var(model.J, domain=pyo.Binary)
+    if linear:
+        model.x = pyo.Var(model.I, model.J, domain=pyo.NonNegativeReals)
+        model.y = pyo.Var(model.J, domain=pyo.NonNegativeReals, bounds=(0, 1))
+    else:
+        model.x = pyo.Var(model.I, model.J, domain=pyo.PositiveIntegers)
+        model.y = pyo.Var(model.J, domain=pyo.Binary)
 
     # Objective function
     model.obj = pyo.Objective(rule=obj_expression)
@@ -85,4 +89,4 @@ def local_search_flp(x, y):
 
 
 # print(read_instance("FLP-100-20-0.txt"))
-solve_flp("FLP-100-20-0.txt", True)
+solve_flp("FLP-150-45-1.txt", False)
