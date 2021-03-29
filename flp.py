@@ -75,6 +75,10 @@ def solve_flp(instance_name, linear):
     results = opt.solve(model, tee=True)
     model.display()
     print(pyo.value(model.obj))
+    for i in model.x:
+        print(str(model.x[i]), model.x[i].value)
+    for j in model.y:
+        print(str(model.y[j]), model.y[j].value)
 
     # return (obj,x,y)
 
@@ -90,4 +94,4 @@ def local_search_flp(x, y):
 
 
 # print(read_instance("FLP-100-20-0.txt"))
-solve_flp("FLP-150-30-0.txt", True)
+solve_flp("FLP-100-20-0.txt", False)
