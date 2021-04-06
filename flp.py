@@ -1,4 +1,7 @@
 import pyomo.environ as pyo
+import time
+import sys
+from multiprocessing import Process
 
 
 def read_instance(file_name):
@@ -46,7 +49,7 @@ def solve_flp(instance_name, linear):
     model = pyo.ConcreteModel()
 
     # Sets
-    model.I = pyo.RangeSet(0, len(demand)-1)
+    model.I = pyo.RangeSet(0, len(demand) - 1)
     model.J = pyo.RangeSet(0, len(capacity) - 1)
 
     # Params
@@ -72,9 +75,12 @@ def solve_flp(instance_name, linear):
 
     # Optimizer
     opt = pyo.SolverFactory('glpk')
-    results = opt.solve(model, tee=True)
-    model.display()
-    print(pyo.value(model.obj))
+    start = time.time()
+    results = opt.solve(model, tee=True)  # reset timer as problem has been solved
+    end = time.time()
+    print(f"Resolution time: {end - start}")
+    # model.display()
+    print(f"Final solution: {pyo.value(model.obj)}")
 
     # return (obj,x,y)
 
@@ -89,5 +95,12 @@ def local_search_flp(x, y):
     # return (obj,x,y)
 
 
-# print(read_instance("FLP-100-20-0.txt"))
-solve_flp("FLP-150-30-0.txt", True)
+if __name__ == "__main__":
+    # print(read_instance("FLP-100-20-0.txt"))
+    if len(sys.argv) != 3:
+        print("Usage: flp.py <filename> <solving option>")
+        exit(1)
+    process = Process(target=solve_flp, name='Process_solve_flp', args=(sys.argv[1], sys.argv[2] == "--lp"))
+    process.start()
+    process.join(timeout=600)  # 10 minutes timeout
+    process.terminate()
