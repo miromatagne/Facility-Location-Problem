@@ -75,7 +75,8 @@ def solve_flp(instance_name, linear):
 
     # Optimizer
     opt = pyo.SolverFactory('glpk')
-    opt.options['timelimit'] = 600
+    #opt.options['timelimit'] = 600
+    opt.options['tmlim'] = 600
     model.display()
     start = time.time()
     # reset timer as problem has been solved
