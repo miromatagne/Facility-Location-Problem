@@ -75,6 +75,9 @@ def solve_flp(instance_name, linear):
     results = opt.solve(model, tee=True)
     model.display()
     print(pyo.value(model.obj))
+
+    #x = [[0 for j in range(len(capacity))] for i in range(len(demand))]
+    #y = [0 for i in range(len(capacity))]
     for i in model.x:
         print(str(model.x[i]), model.x[i].value)
     for j in model.y:
