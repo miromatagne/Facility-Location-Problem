@@ -1,8 +1,6 @@
 import pyomo.environ as pyo
 import time
 import sys
-from multiprocessing import Process
-
 
 def read_instance(file_name):
     opening_cost = {}

@@ -44,6 +44,16 @@ def int_solution_time_i_over_j():
     plt.show()
 
 
+def print_filtered_lp():
+    int_df = pd.read_csv("int_benchmark.csv")
+    lp_df = pd.read_csv("LP_benchmark.csv")
+    comp_df = int_df.set_index("File").join(lp_df.set_index("File"), lsuffix="_int", rsuffix="_lp")
+    comp_df = comp_df[comp_df["Execution time_int"] < 600]
+    comp_df["Integrality gap"] = comp_df["Solution_lp"]/comp_df["Solution_int"]
+    print(comp_df.to_string())
+
+
 if __name__ == "__main__":
-    int_solution_time_i()
-    int_solution_time_i_over_j()
+    # int_solution_time_i()
+    # int_solution_time_i_over_j()
+    print_filtered_lp()
