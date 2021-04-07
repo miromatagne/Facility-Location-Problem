@@ -74,13 +74,12 @@ def solve_flp(instance_name, linear):
     model.constraint3 = pyo.Constraint(model.I, rule=constraint_rule_3)
 
     # Optimizer
+    TIME_LIMIT = 600
     opt = pyo.SolverFactory('glpk')
-    #opt.options['timelimit'] = 600
-    #opt.options['tmlim'] = 600
+    opt.options['tmlim'] = TIME_LIMIT
     start = time.time()
     # reset timer as problem has been solved
-    results = opt.solve(model, tee=True)
-    model.display()
+    results = opt.solve(model, tee=True, timelimit=TIME_LIMIT)
     end = time.time()
     obj = pyo.value(model.obj)
     print(f"Resolution time: {end - start}")
@@ -111,8 +110,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: flp.py <filename> <solving option>")
         exit(1)
-    process = Process(target=solve_flp, name='Process_solve_flp',
-                      args=(sys.argv[1], sys.argv[2] == "--lp"))
-    process.start()
-    process.join(timeout=600)  # 10 minutes timeout
-    process.terminate()
+    obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
+    print(y)
