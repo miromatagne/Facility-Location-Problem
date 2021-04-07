@@ -49,7 +49,7 @@ def print_filtered_lp():
     lp_df = pd.read_csv("LP_benchmark.csv")
     comp_df = int_df.set_index("File").join(lp_df.set_index("File"), lsuffix="_int", rsuffix="_lp")
     comp_df = comp_df[comp_df["Execution time_int"] < 600]
-    comp_df["Integrality gap"] = comp_df["Solution_lp"]/comp_df["Solution_int"]
+    comp_df["Integrality gap"] = comp_df["Solution_int"]/comp_df["Solution_lp"]
     print(comp_df.to_string())
 
 
