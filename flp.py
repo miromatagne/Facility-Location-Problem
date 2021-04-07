@@ -76,21 +76,24 @@ def solve_flp(instance_name, linear):
     # Optimizer
     opt = pyo.SolverFactory('glpk')
     #opt.options['timelimit'] = 600
-    opt.options['tmlim'] = 600
-    model.display()
+    #opt.options['tmlim'] = 600
     start = time.time()
     # reset timer as problem has been solved
     results = opt.solve(model, tee=True)
+    model.display()
     end = time.time()
+    obj = pyo.value(model.obj)
     print(f"Resolution time: {end - start}")
-    # model.display()
-    print(f"Final solution: {pyo.value(model.obj)}")
-    for i in model.x:
-        print(str(model.x[i]), model.x[i].value)
-    for j in model.y:
-        print(str(model.y[j]), model.y[j].value)
+    print(f"Final solution: {obj}")
 
-    # return (obj,x,y)
+    x = []
+    for i in range(len(demand)):
+        sublist = list(model.x[i, :].value)
+        x.append(sublist)
+
+    y = list(model.y[:].value)
+
+    return (obj, x, y)
 
 
 def initial_solution_flp(instance_name):
