@@ -44,6 +44,15 @@ def constraint_rule_3(m, i):
 
 
 def solve_flp(instance_name, linear):
+    """
+        Solve an FLP instance using the GLPK solver. The solution can either
+        be an integer solution or an LP relaxation.
+
+        :param instance_name: name of the FLP instance to solve
+        :param linear: True if we wish to solve the LP relaxation
+        :return: (obj,x,y) where obj is the objective function corresponding
+                 to the solutions x and y
+    """
     opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
     model = pyo.ConcreteModel()
 
@@ -95,64 +104,67 @@ def solve_flp(instance_name, linear):
 
 
 def initial_solution_flp(instance_name):
+    """
+        Computes an initial feasible integer solution to the FLP instance
+        using a greedy algorithm.
+
+        :param instance_name: name of the instance file
+        :return: (obj,x,y) where obj is the objective function corresponding
+                 to the solutions x and y
+    """
     opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
-    # print(travel_cost)
+
+    # Initialize xbar and ybar to 0's
     xbar = [[0 for j in range(len(capacity))] for i in range(len(demand))]
     ybar = [0 for j in range(len(capacity))]
 
     # TODO: check if ok because solve_flp re-reads the file again (waste)
+    # Solve the LP Relaxation of the FLP instance, x_star and y_star are the optimal solutions
     _, x_star, y_star = solve_flp(instance_name, True)
 
-    j_values = range(len(capacity))
-    print(y_star)
-    # temp = sorted(zip(y_star, j_values), reverse=True)
-    # j_values = [x for _, x in temp]
-    # y_star = [y for y, _ in temp]
+    # Indexes of the sorted y_star elements in descending order
     j_values = sorted(range(len(capacity)),
                       key=lambda k: y_star[k], reverse=True)
 
-    print(j_values)
-
     for j_prime in range(len(capacity)):
+        # j is the index of the j-th highest y_star
         j = j_values[j_prime]
         ybar[j] = 1
-        # temp = sorted(zip([x_star[i][j]
-        #                    for i in range(len(x_star))], i_values), reverse=True)
-        # i_values = [x for _, x in temp]
-        # x_star_temp = [y for y, _ in temp]
+
+        # Indexes of the sorted x_star elements for a fixed j in descending order
         i_values = sorted(range(len(demand)),
                           key=lambda k: x_star[k][j], reverse=True)
 
         for i_prime in range(len(demand)):
             i = i_values[i_prime]
+
+            # Sums corresponding to both conditions to be verified
             capacity_constraint = sum(xbar[k][j] for k in range(len(xbar)))
             demand_constraint = sum(xbar[i][l] for l in range(len(xbar[i])))
 
-            # if ((i == 34 or i == 46 or i == 91 or i == 7 or i == 2) and j == 0):
-            #     print(i, j)
-            #     print("Capacity constraint :", capacity_constraint)
-            #     print("Demand constraint :", demand_constraint)
-            #     print("Demand :", demand[i])
-            #     print("Capacity :", capacity[j])
-            #     print("xij :", xbar[i][j])
+            # If there is sufficient capacity available and demand is unfulfilled, update
+            # xbar[i][j] in order to tighten one of the 2 conditions
             if capacity_constraint < capacity[j] and demand_constraint < demand[i]:
                 xbar[i][j] = min(capacity[j] - capacity_constraint,
                                  demand[i] - demand_constraint)
-                if ((i == 34 or i == 46 or i == 91 or i == 7 or i == 2) and j == 0):
-                    print("new xij", xbar[i][j])
 
+        # If all demands are met, compute the objective value and return the solution
         if all([sum([xbar[i][j] for j in range(len(capacity))]) >= demand[i] for i in range(len(demand))]):
+            # Transform the travel_cost into a 2D matrix
             travel_cost_matrix = [
                 [0 for j in range(len(capacity))] for i in range(len(demand))]
             for key in travel_cost:
                 travel_cost_matrix[key[0]][key[1]] = travel_cost[key]
-            # print(travel_cost_matrix)
+
+            # Compute both operands of the objective function
             sum_y = sum(i[0] * i[1]
                         for i in zip(ybar, list(opening_cost.values())))
             sum_x = sum(sum(a * b for a, b in zip(*rows))
                         for rows in zip(xbar, travel_cost_matrix))
             obj = sum_x + sum_y
             return (obj, xbar, ybar)
+
+    # Return None if no feasible integer solution exists
     return None
 
 
@@ -169,8 +181,4 @@ if __name__ == "__main__":
     # obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
     # print(y)
     obj, x, y = initial_solution_flp("FLP-100-20-0.txt")
-    for j in range(len(x[0])):
-        for i in range(len(x)):
-            if x[i][j] != 0:
-                print("x_" + str(i) + "_" + str(j) + " = " + str(x[i][j]))
     print(obj)
