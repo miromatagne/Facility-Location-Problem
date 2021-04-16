@@ -44,16 +44,53 @@ def int_solution_time_i_over_j():
     plt.show()
 
 
+def timout_count():
+    int_df = pd.read_csv("int_benchmark.csv")
+    int_df = int_df[int_df["Execution time"] >= 600]
+    timeout_count = dict()
+    for i, row in int_df.iterrows():
+        try:
+            timeout_count[row["File"].split("-")[1]] += 1
+        except KeyError:
+            timeout_count[row["File"].split("-")[1]] = 1
+    print(timeout_count)
+    plt.title("Timeout count for various I values")
+    plt.xlabel("Number of clients I")
+    plt.ylabel("Number of timeouts")
+    plt.plot(timeout_count.keys(), timeout_count.values())
+    plt.show()
+
+def timout_count_ij():
+    int_df = pd.read_csv("int_benchmark.csv")
+    int_df = int_df[int_df["Execution time"] >= 600]
+    timeout_count = dict()
+    for i, row in int_df.iterrows():
+        row_lst = row["File"].split("-")
+        try:
+            timeout_count[str(int(row_lst[1]) // int(row_lst[2]))] += 1
+        except KeyError:
+            timeout_count[str(int(row_lst[1]) // int(row_lst[2]))] = 1
+    print(timeout_count)
+    plt.title("Timeout count for various I/J ratios")
+    plt.xlabel("I/J ratio")
+    plt.ylabel("Number of timeouts")
+    plt.plot(timeout_count.keys(), timeout_count.values())
+    plt.show()
+
+
+
 def print_filtered_lp():
     int_df = pd.read_csv("int_benchmark.csv")
     lp_df = pd.read_csv("LP_benchmark.csv")
     comp_df = int_df.set_index("File").join(lp_df.set_index("File"), lsuffix="_int", rsuffix="_lp")
     comp_df = comp_df[comp_df["Execution time_int"] < 600]
-    comp_df["Integrality gap"] = comp_df["Solution_int"]/comp_df["Solution_lp"]
+    comp_df["Integrality gap"] = comp_df["Solution_int"] / comp_df["Solution_lp"]
     print(comp_df.to_string())
 
 
 if __name__ == "__main__":
     # int_solution_time_i()
     # int_solution_time_i_over_j()
-    print_filtered_lp()
+    # print_filtered_lp()
+    timout_count()
+    timout_count_ij()
