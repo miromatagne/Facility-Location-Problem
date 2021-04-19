@@ -235,7 +235,7 @@ def local_search_flp(x, y):
             #best_x = xbar[:][:]
             best_y = ybar.copy()
             best_obj = obj_bar
-            print("VERIF", check_validity(best_x, best_y))
+            #print("VERIF", check_validity(best_x, best_y))
     return best_obj, best_x, best_y
 
 
