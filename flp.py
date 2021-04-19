@@ -2,6 +2,7 @@ import random
 
 import pyomo.environ as pyo
 import time
+import copy
 
 
 class Instance:
@@ -17,7 +18,7 @@ class Instance:
 
 def read_instance(file_name):
     """
-        Reads the problem instance and extracts all the usefuk information from the 
+        Reads the problem instance and extracts all the usefuk information from the
         instance file.
 
         :param file_name: name of the instance file to be read
@@ -72,7 +73,7 @@ def solve_flp(instance_name, linear):
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
-    #opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
+    # opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
     opening_cost, demand, capacity, travel_cost = instance.opening_cost, instance.demand, instance.capacity, instance.travel_cost
     model = pyo.ConcreteModel()
 
@@ -216,12 +217,77 @@ def local_search_flp(x, y):
     demand, capacity, travel_cost, opening_cost = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost
     travel_cost_matrix = travel_cost_to_matrix(
         len(capacity), len(demand), travel_cost)
-    xbar, ybar = facility_movement(x, y, travel_cost_matrix)
-    return compute_obj_value(xbar, ybar), xbar, ybar
+    start_time = time.time()
+    xbar, ybar = copy.deepcopy(x), y.copy()
+    print(check_validity(xbar, ybar))
+    best_x, best_y = copy.deepcopy(x.copy()), y.copy()
+    best_obj = compute_obj_value(xbar, ybar)
+    while time.time() - start_time < 20:
+        r = random.random()
+        if r < 0.8:
+            xbar, ybar = facility_movement(
+                xbar.copy(), ybar.copy(), travel_cost_matrix)
+        else:
+            xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
+        obj_bar = compute_obj_value(xbar, ybar)
+        if obj_bar < best_obj:
+            best_x = copy.deepcopy(xbar)
+            #best_x = xbar[:][:]
+            best_y = ybar.copy()
+            best_obj = obj_bar
+            print("VERIF", check_validity(best_x, best_y))
+    return best_obj, best_x, best_y
 
 
-def assignment_movement():
-    pass
+def assignment_movement(x, y):
+    xbar, ybar = x[:], y[:]
+    demand, capacity = instance.demand, instance.capacity
+    nb_customers = random.randint(1, 2)
+    customers = random.sample(range(len(demand)), nb_customers)
+    chosen_demands = {}
+    for i in customers:
+        chosen_demands[i] = []
+        used_facilities = [k for k in range(len(x[i])) if x[i][k] > 0]
+        nb_facilities = random.randint(1, min(len(used_facilities), 2))
+        facilities = random.sample(used_facilities, nb_facilities)
+        # print(x[i])
+        # print(len(used_facilities))
+        for j in facilities:
+            # print(x[i][j])
+            chosen_demands[i].append((i, j))
+    # print(chosen_demands)
+
+    for c in chosen_demands:
+        # print(c)
+        if len(chosen_demands[c]) > 0:
+            for d in chosen_demands[c]:
+                opened_facilities = [i for i in range(len(y)) if y[i] == 1]
+                if d[1] in opened_facilities:
+                    opened_facilities.remove(d[1])
+                remaining_demand = x[d[0]][d[1]]
+                while remaining_demand != 0 and len(opened_facilities) > 0:
+                    #print("remaining_demand", remaining_demand)
+                    new_facility = random.sample(opened_facilities, 1)
+                    new_facility = new_facility[0]
+                    # print(new_facility)
+                    capacity_constraint = sum(
+                        xbar[k][new_facility] for k in range(len(xbar)))
+                    #print("capacity_constraint", capacity_constraint)
+                    #print("capacity", capacity[new_facility])
+                    if capacity_constraint < capacity[new_facility]:
+                        # print(xbar[d[0]][new_facility])
+                        # print(xbar[d[0]][d[1]])
+                        amount_realloc = min(
+                            capacity[new_facility] - capacity_constraint, remaining_demand)
+                        #print("REALLOC", amount_realloc)
+                        xbar[d[0]][new_facility] += amount_realloc
+                        xbar[d[0]][d[1]] -= amount_realloc
+                        # print(xbar[d[0]][new_facility])
+                        # print(xbar[d[0]][d[1]])
+                        remaining_demand -= amount_realloc
+                    else:
+                        opened_facilities.remove(new_facility)
+    return xbar, ybar
 
 
 def facility_movement(x, y, travel_cost):
@@ -275,7 +341,21 @@ def facility_movement(x, y, travel_cost):
             if ybar[j] == 1 and capacity_constraint < capacity[j] and demand_constraint < demand[i]:
                 xbar[i][j] = min(capacity[j] - capacity_constraint,
                                  demand[i] - demand_constraint)
+    #print(check_validity(xbar, ybar))
     return xbar, ybar
+
+
+def check_validity(x, y):
+    demand, capacity = instance.demand, instance.capacity
+    for j in range(len(x[0])):
+        capacity_constraint = sum(x[k][j] for k in range(len(x)))
+        if capacity_constraint > capacity[j]*y[j]:
+            return False
+    for i in range(len(x)):
+        demand_constraint = sum(x[i][l] for l in range(len(x[i])))
+        if demand_constraint < demand[i]:
+            return False
+    return True
 
 
 if __name__ == "__main__":
@@ -283,12 +363,13 @@ if __name__ == "__main__":
     # if len(sys.argv) != 3:
     #     print("Usage: flp.py <filename> <solving option>")
     #     exit(1)
-    #obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
+    # obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
     # print(y)
 
     # Global variable corresponding to the instance
     instance = Instance("FLP-100-20-0.txt")
 
     obj, x, y = initial_solution_flp("FLP-100-20-0.txt")
-    #obj_sol, x_sol, y_sol = local_search_flp(x, y)
-    print(obj)
+    obj_sol, x_sol, y_sol = local_search_flp(x, y)
+    print("Solution :", obj_sol)
+    print("Valid :", check_validity(x_sol, y_sol))
