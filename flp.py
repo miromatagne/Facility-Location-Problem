@@ -4,7 +4,25 @@ import pyomo.environ as pyo
 import time
 
 
+class Instance:
+    def __init__(self, file_name):
+        # Store all the attributes of the instance
+        self.opening_cost, self.demand, self.capacity, self.travel_cost = read_instance(
+            file_name)
+
+        # Compute the travel cost matric of the instance
+        self.travel_cost_matrix = travel_cost_to_matrix(
+            len(self.capacity), len(self.demand), self.travel_cost)
+
+
 def read_instance(file_name):
+    """
+        Reads the problem instance and extracts all the usefuk information from the 
+        instance file.
+
+        :param file_name: name of the instance file to be read
+        :return: all the information relative to that instance
+    """
     opening_cost = {}
     demand = {}
     capacity = {}
@@ -54,7 +72,8 @@ def solve_flp(instance_name, linear):
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
-    opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
+    #opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
+    opening_cost, demand, capacity, travel_cost = instance.opening_cost, instance.demand, instance.capacity, instance.travel_cost
     model = pyo.ConcreteModel()
 
     # Sets
@@ -113,7 +132,7 @@ def initial_solution_flp(instance_name):
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
-    opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
+    opening_cost, demand, capacity, travel_cost = instance.opening_cost, instance.demand, instance.capacity, instance.travel_cost_matrix
 
     # Initialize xbar and ybar to 0's
     xbar = [[0 for j in range(len(capacity))] for i in range(len(demand))]
@@ -151,18 +170,23 @@ def initial_solution_flp(instance_name):
 
         # If all demands are met, compute the objective value and return the solution
         if all([sum([xbar[i][j] for j in range(len(capacity))]) >= demand[i] for i in range(len(demand))]):
-            # Transform the travel_cost into a 2D matrix
-            travel_cost_matrix = travel_cost_to_matrix(len(capacity), len(demand), travel_cost)
-
             # Compute both operands of the objective function
-            obj = compute_obj_value(opening_cost, travel_cost_matrix, xbar, ybar)
+            obj = compute_obj_value(xbar, ybar)
             return (obj, xbar, ybar)
 
     # Return None if no feasible integer solution exists
     return None
 
 
-def compute_obj_value(opening_cost, travel_cost_matrix, x, y):
+def compute_obj_value(x, y):
+    """
+        Computes the objective value of a solution (x,y)
+
+        :param x: values of the xij variables
+        :param y: values of the yj variables
+        :return: value of the objective function
+    """
+    travel_cost_matrix, opening_cost = instance.travel_cost_matrix, instance.opening_cost
     sum_y = sum(i[0] * i[1]
                 for i in zip(y, list(opening_cost.values())))
     sum_x = sum(sum(a * b for a, b in zip(*rows))
@@ -171,23 +195,37 @@ def compute_obj_value(opening_cost, travel_cost_matrix, x, y):
     return obj
 
 
-def travel_cost_to_matrix(capacity_length, demand_length, travel_cost_dict):
+def travel_cost_to_matrix(nb_facilities, nb_clients, travel_cost_dict):
+    """
+        Converts the travel cost dictionnary into a matrix, for more efficient computations
+        of the objective function.
+
+        :param nb_facilities: number of facilities
+        :param nb_clients: number of clients
+        :param travel_cost_dict: dictionnary containing the travel costs
+        :return: the 2D matric corresponding to the travel costs
+    """
     travel_cost_matrix = [
-        [0 for j in range(capacity_length)] for i in range(demand_length)]
+        [0 for j in range(nb_facilities)] for i in range(nb_clients)]
     for key in travel_cost_dict:
         travel_cost_matrix[key[0]][key[1]] = travel_cost_dict[key]
     return travel_cost_matrix
 
 
-def local_search_flp(x, y, demand, capacity, travel_cost, opening_cost):
-    travel_cost_matrix = travel_cost_to_matrix(len(capacity), len(demand), travel_cost)
-    xbar, ybar = facility_movement(x, y, demand, capacity, travel_cost_matrix)
-    return compute_obj_value(opening_cost, travel_cost_matrix, xbar, ybar), xbar, ybar
+def local_search_flp(x, y):
+    demand, capacity, travel_cost, opening_cost = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost
+    travel_cost_matrix = travel_cost_to_matrix(
+        len(capacity), len(demand), travel_cost)
+    xbar, ybar = facility_movement(x, y, travel_cost_matrix)
+    return compute_obj_value(xbar, ybar), xbar, ybar
+
 
 def assignment_movement():
     pass
 
-def facility_movement(x, y, demand, capacity, travel_cost):
+
+def facility_movement(x, y, travel_cost):
+    demand, capacity = instance.demand, instance.capacity
     openable_facilities = [i for i in range(len(y)) if y[i] == 0]
     closable_facilities = [i for i in range(len(y)) if y[i] == 1]
     if len(openable_facilities) == 0:
@@ -195,11 +233,15 @@ def facility_movement(x, y, demand, capacity, travel_cost):
         return None
     while True:
         # choose randomly the number of facilities we open or close
-        opened_facilities_count = random.randint(1, min(len(openable_facilities), 2))
-        closed_facilities_count = random.randint(1, min(len(closable_facilities), 2))
+        opened_facilities_count = random.randint(
+            1, min(len(openable_facilities), 2))
+        closed_facilities_count = random.randint(
+            1, min(len(closable_facilities), 2))
         # list of indices of facilities that open/close
-        opened_facilities = random.sample(openable_facilities, opened_facilities_count)
-        closed_facilities = random.sample(closable_facilities, closed_facilities_count)
+        opened_facilities = random.sample(
+            openable_facilities, opened_facilities_count)
+        closed_facilities = random.sample(
+            closable_facilities, closed_facilities_count)
         amount_sum = 0
         for j_minus in closed_facilities:
             amount_sum += sum(x[k][j_minus] for k in range(len(x)))
@@ -216,10 +258,12 @@ def facility_movement(x, y, demand, capacity, travel_cost):
         ybar[j_minus] = 0
         for i in range(len(x)):
             xbar[i][j_minus] = 0
-    i_values = sorted(range(len(demand)), key=lambda k: demand[k], reverse=True)
+    i_values = sorted(range(len(demand)),
+                      key=lambda k: demand[k], reverse=True)
     for i_prime in range(len(i_values)):
         i = i_values[i_prime]
-        j_values = sorted(range(len(travel_cost[0])), key=lambda k: travel_cost[i][k])
+        j_values = sorted(
+            range(len(travel_cost[0])), key=lambda k: travel_cost[i][k])
         for j_prime in range(len(j_values)):
             j = j_values[j_prime]
             # Sums corresponding to both conditions to be verified
@@ -239,9 +283,12 @@ if __name__ == "__main__":
     # if len(sys.argv) != 3:
     #     print("Usage: flp.py <filename> <solving option>")
     #     exit(1)
-    # obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
+    #obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
     # print(y)
-    opening_cost, demand, capacity, travel_cost = read_instance("FLP-100-20-0.txt")
+
+    # Global variable corresponding to the instance
+    instance = Instance("FLP-100-20-0.txt")
+
     obj, x, y = initial_solution_flp("FLP-100-20-0.txt")
-    obj_sol, x_sol, y_sol = local_search_flp(x, y, demand, capacity, travel_cost, opening_cost)
-    print(obj_sol)
+    #obj_sol, x_sol, y_sol = local_search_flp(x, y)
+    print(obj)
