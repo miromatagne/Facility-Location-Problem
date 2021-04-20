@@ -218,10 +218,13 @@ def local_search_flp(x, y):
     travel_cost_matrix = travel_cost_to_matrix(
         len(capacity), len(demand), travel_cost)
     start_time = time.time()
+    tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
-    print(check_validity(xbar, ybar))
+    #print(check_validity(xbar, ybar))
     best_x, best_y = copy.deepcopy(x.copy()), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
+    past_results = []
+    non_tabu_count = 0
     while time.time() - start_time < 20:
         r = random.random()
         if r < 0.8:
@@ -229,13 +232,21 @@ def local_search_flp(x, y):
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
         else:
             xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
-        obj_bar = compute_obj_value(xbar, ybar)
-        if obj_bar < best_obj:
-            best_x = copy.deepcopy(xbar)
-            #best_x = xbar[:][:]
-            best_y = ybar.copy()
-            best_obj = obj_bar
-            #print("VERIF", check_validity(best_x, best_y))
+        if (xbar, ybar) not in past_results:
+            past_results.append((xbar, ybar))
+            obj_bar = compute_obj_value(xbar, ybar)
+            if obj_bar < best_obj:
+                best_x = copy.deepcopy(xbar)
+                #best_x = xbar[:][:]
+                best_y = ybar.copy()
+                best_obj = obj_bar
+                #print("VERIF", check_validity(best_x, best_y))
+            non_tabu_count += 1
+        else:
+            tabu_count += 1
+    print("Tabu :", tabu_count)
+    print("Non tabu :", non_tabu_count)
+    # print(past_results)
     return best_obj, best_x, best_y
 
 
