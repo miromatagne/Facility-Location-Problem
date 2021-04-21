@@ -223,17 +223,22 @@ def local_search_flp(x, y):
     #print(check_validity(xbar, ybar))
     best_x, best_y = copy.deepcopy(x.copy()), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
-    past_results = []
+    # past_results = []
+    past_results = set()
     non_tabu_count = 0
-    while time.time() - start_time < 20:
-        r = random.random()
-        if r < 0.8:
+    default_probability = 0.8
+    eps = default_probability
+    eps_decay = 0.9
+    random.seed(1234)
+    stuck = 0
+    while time.time() - start_time < 60:
+        if random.random() < eps:
             xbar, ybar = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
         else:
             xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
-        if (xbar, ybar) not in past_results:
-            past_results.append((xbar, ybar))
+        if (tuple([tuple(i) for i in xbar]), tuple(ybar)) not in past_results:
+            past_results.add((tuple([tuple(i) for i in xbar]), tuple(ybar)))
             obj_bar = compute_obj_value(xbar, ybar)
             if obj_bar < best_obj:
                 best_x = copy.deepcopy(xbar)
@@ -241,6 +246,13 @@ def local_search_flp(x, y):
                 best_y = ybar.copy()
                 best_obj = obj_bar
                 #print("VERIF", check_validity(best_x, best_y))
+                eps *= eps_decay
+            else:
+                stuck += 1
+                if stuck > 20:
+                    print("unstuck")
+                    eps = default_probability
+                    stuck = 0
             non_tabu_count += 1
         else:
             tabu_count += 1
