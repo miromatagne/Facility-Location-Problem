@@ -14,11 +14,11 @@ def int_solution_time_i():
         except KeyError:
             average_i_comp_time[row["File"].split("-")[1]] = [float(row["Execution time"])]
     for i in average_i_comp_time:
-        average_i_comp_time[i] = np.mean(average_i_comp_time[i])
+        average_i_comp_time[i] = 600 - np.mean(average_i_comp_time[i])
     print(average_i_comp_time)
-    plt.title("Average computation time for various I values")
+    plt.title("Average deviation from the timeout threshold for various I values")
     plt.xlabel("Number of clients I")
-    plt.ylabel("Average computation time (s)")
+    plt.ylabel("Average deviation from the timeout threshold (s)")
     plt.plot(average_i_comp_time.keys(), average_i_comp_time.values())
     plt.show()
 
@@ -35,18 +35,19 @@ def int_solution_time_i_over_j():
         except KeyError:
             average_i_over_j_comp_time[str(int(row_lst[1]) // int(row_lst[2]))] = [float(row["Execution time"])]
     for i in average_i_over_j_comp_time:
-        average_i_over_j_comp_time[i] = np.mean(average_i_over_j_comp_time[i])
+        average_i_over_j_comp_time[i] = 600 - np.mean(average_i_over_j_comp_time[i])
     print(average_i_over_j_comp_time)
-    plt.title("Average computation time for various I/J ratios")
+    plt.title("Average deviation from the timeout threshold for various I/J ratios")
     plt.xlabel("I/J ratio")
-    plt.ylabel("Average computation time (s)")
+    plt.ylabel("Average deviation from the timeout threshold (s)")
     plt.plot(average_i_over_j_comp_time.keys(), average_i_over_j_comp_time.values())
     plt.show()
 
 
 def timout_count():
+    # this function takes the fist time for each I
     int_df = pd.read_csv("int_benchmark.csv")
-    int_df = int_df[int_df["Execution time"] >= 600]
+    # int_df = int_df[int_df["Execution time"] >= 600]
     timeout_count = dict()
     for i, row in int_df.iterrows():
         try:
@@ -87,10 +88,20 @@ def print_filtered_lp():
     comp_df["Integrality gap"] = comp_df["Solution_int"] / comp_df["Solution_lp"]
     print(comp_df.to_string())
 
+def greedy_optimality_gap():
+    int_df = pd.read_csv("int_benchmark.csv")
+    greedy_sol = pd.read_csv("greedy_solutions.csv")
+    comp_df = int_df.set_index("File").join(greedy_sol.set_index("File"), lsuffix="_int", rsuffix="_greedy")
+    comp_df = comp_df[comp_df["Execution time"] < 600]
+    comp_df["Optimality gap"] = (comp_df["Solution_greedy"] - comp_df["Solution_int"]) / comp_df["Solution_int"]
+    print(comp_df.to_latex())
+
+
 
 if __name__ == "__main__":
     # int_solution_time_i()
     # int_solution_time_i_over_j()
     # print_filtered_lp()
-    timout_count()
-    timout_count_ij()
+    # timout_count()
+    # timout_count_ij()
+    greedy_optimality_gap()
