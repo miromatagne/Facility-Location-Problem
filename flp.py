@@ -231,12 +231,15 @@ def local_search_flp(x, y):
     eps_decay = 0.9
     random.seed(1234)
     stuck = 0
-    while time.time() - start_time < 60:
+    facility_moves, assignment_moves = 0, 0
+    while time.time() - start_time < 3*60:
         if random.random() < eps:
             xbar, ybar = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
+            facility_moves += 1
         else:
             xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
+            assignment_moves += 1
         if (tuple([tuple(i) for i in xbar]), tuple(ybar)) not in past_results:
             past_results.add((tuple([tuple(i) for i in xbar]), tuple(ybar)))
             obj_bar = compute_obj_value(xbar, ybar)
@@ -249,12 +252,14 @@ def local_search_flp(x, y):
                 eps *= eps_decay
             else:
                 stuck += 1
-                if stuck > 20:
+                if stuck > 5:
                     eps = default_probability
                     stuck = 0
             non_tabu_count += 1
         else:
             tabu_count += 1
+    print(f"Facility moves : {facility_moves}")
+    print(f"Assignment moves : {assignment_moves}")
     print("Tabu :", tabu_count)
     print("Non tabu :", non_tabu_count)
     # print(past_results)
