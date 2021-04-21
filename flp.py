@@ -232,29 +232,37 @@ def local_search_flp(x, y):
     # random.seed(1234)
     stuck = 0
     facility_moves, assignment_moves = 0, 0
+    facility_impr = False
     while time.time() - start_time < 20:
-        if stuck > 5:
+        if not facility_impr:
             xbar, ybar = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
             facility_moves += 1
-            stuck = 0
+            move = "facility"
         else:
             xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
             assignment_moves += 1
+            move = "assignment"
         if (tuple([tuple(i) for i in xbar]), tuple(ybar)) not in past_results:
             past_results.add((tuple([tuple(i) for i in xbar]), tuple(ybar)))
             obj_bar = compute_obj_value(xbar, ybar)
-            print(obj_bar)
             if obj_bar < best_obj:
-                print("OKOK")
+                print(obj_bar)
                 best_x = copy.deepcopy(xbar)
                 #best_x = xbar[:][:]
                 best_y = ybar.copy()
                 best_obj = obj_bar
                 #print("VERIF", check_validity(best_x, best_y))
                 #eps *= eps_decay
+                stuck = 0
+                if move == "facility":
+                    print("FACILITY :", obj_bar)
+                    facility_impr = True
             else:
                 stuck += 1
+                if stuck >= 10:
+                    facility_impr = False
+                    stuck = 0
             non_tabu_count += 1
         else:
             tabu_count += 1
