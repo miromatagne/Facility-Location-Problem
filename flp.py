@@ -250,7 +250,6 @@ def local_search_flp(x, y):
             else:
                 stuck += 1
                 if stuck > 20:
-                    print("unstuck")
                     eps = default_probability
                     stuck = 0
             non_tabu_count += 1
