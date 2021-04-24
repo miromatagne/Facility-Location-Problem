@@ -220,7 +220,7 @@ def local_search_flp(x, y):
     start_time = time.time()
     tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
-    #print(check_validity(xbar, ybar))
+    # print(check_validity(xbar, ybar))
     best_x, best_y = copy.deepcopy(x.copy()), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
     # past_results = []
@@ -229,10 +229,10 @@ def local_search_flp(x, y):
     default_probability = 0.8
     eps = default_probability
     eps_decay = 0.9
-    random.seed(1234)
+    random.seed(6)
     stuck = 0
     facility_moves, assignment_moves = 0, 0
-    while time.time() - start_time < 3*60:
+    while time.time() - start_time < 20:
         if random.random() < eps:
             xbar, ybar = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
@@ -245,10 +245,10 @@ def local_search_flp(x, y):
             obj_bar = compute_obj_value(xbar, ybar)
             if obj_bar < best_obj:
                 best_x = copy.deepcopy(xbar)
-                #best_x = xbar[:][:]
+                # best_x = xbar[:][:]
                 best_y = ybar.copy()
                 best_obj = obj_bar
-                #print("VERIF", check_validity(best_x, best_y))
+                # print("VERIF", check_validity(best_x, best_y))
                 eps *= eps_decay
             else:
                 stuck += 1
@@ -268,7 +268,7 @@ def local_search_flp(x, y):
 
 def assignment_movement(x, y):
     xbar, ybar = x[:], y[:]
-    demand, capacity = instance.demand, instance.capacity
+    demand, capacity, travel_cost = instance.demand, instance.capacity, instance.travel_cost_matrix
     nb_customers = random.randint(1, 2)
     customers = random.sample(range(len(demand)), nb_customers)
     chosen_demands = {}
@@ -293,20 +293,27 @@ def assignment_movement(x, y):
                     opened_facilities.remove(d[1])
                 remaining_demand = x[d[0]][d[1]]
                 while remaining_demand != 0 and len(opened_facilities) > 0:
-                    #print("remaining_demand", remaining_demand)
-                    new_facility = random.sample(opened_facilities, 1)
+                    # print("remaining_demand", remaining_demand)
+                    if random.random() < 0.5:
+                        opened_facilities_weights = [
+                            1/travel_cost[d[0]][i] for i in opened_facilities]
+                        # print(opened_facilities_weights)
+                        new_facility = random.choices(
+                            opened_facilities, weights=opened_facilities_weights, k=1)
+                    else:
+                        new_facility = random.sample(opened_facilities, 1)
                     new_facility = new_facility[0]
                     # print(new_facility)
                     capacity_constraint = sum(
                         xbar[k][new_facility] for k in range(len(xbar)))
-                    #print("capacity_constraint", capacity_constraint)
-                    #print("capacity", capacity[new_facility])
+                    # print("capacity_constraint", capacity_constraint)
+                    # print("capacity", capacity[new_facility])
                     if capacity_constraint < capacity[new_facility]:
                         # print(xbar[d[0]][new_facility])
                         # print(xbar[d[0]][d[1]])
                         amount_realloc = min(
                             capacity[new_facility] - capacity_constraint, remaining_demand)
-                        #print("REALLOC", amount_realloc)
+                        # print("REALLOC", amount_realloc)
                         xbar[d[0]][new_facility] += amount_realloc
                         xbar[d[0]][d[1]] -= amount_realloc
                         # print(xbar[d[0]][new_facility])
@@ -314,23 +321,73 @@ def assignment_movement(x, y):
                         remaining_demand -= amount_realloc
                     else:
                         opened_facilities.remove(new_facility)
+
+    # for i in range(len(ybar)):
+    #     #print([xbar[k][i] for k in range(len(xbar))])
+    #     if ybar[i] == 1 and sum(xbar[k][i] for k in range(len(xbar))) == 0:
+    #         ybar[i] = 0
+    print(compute_obj_value(xbar, ybar))
     return xbar, ybar
 
 
 def facility_movement(x, y, travel_cost):
-    demand, capacity = instance.demand, instance.capacity
+    # for i in range(len(y)):
+    #     print("X", [x[k][i] for k in range(len(x))])
+    # print("Y", y)
+    # print("X", [x[k][17] for k in range(len(x))])
+
+    demand, capacity, opening_cost = instance.demand, instance.capacity, instance.opening_cost
     openable_facilities = [i for i in range(len(y)) if y[i] == 0]
     closable_facilities = [i for i in range(len(y)) if y[i] == 1]
+    # for i in closable_facilities:
+    # print(sum(x[j][i] for j in range(len(x))))
+    # print('index', i)
+
+    # print(y[8])
+    # print([x[j][8] for j in range(len(x))])
     if len(openable_facilities) == 0:
         # we can not open any facility
         return None
+    # Ratio opening_cost/capacity
+    closable_ratios = [capacity[i]/max(sum(x[j][i] for j in range(len(x))), 1)
+                       for i in closable_facilities]
+    openable_ratios = [capacity[i]/opening_cost[i]
+                       for i in openable_facilities]
+
+    #openable_ratios = [(i, (sum(x[j][i] for j in range(len(x))))/capacity[i]) for i in openable_facilities]
+    # closable_ratios = [(sum(x[j][i] for j in range(len(x))))/capacity[i]
+    #                    for i in closable_facilities]
+
+    # openable_ratios.sort(key=lambda tup: tup[1])
+    # closable_ratios.sort(key=lambda tup: tup[1])
+    # print(openable_ratios)
+    # print(closable_ratios)
     while True:
         # choose randomly the number of facilities we open or close
         opened_facilities_count = random.randint(
             1, min(len(openable_facilities), 2))
         closed_facilities_count = random.randint(
             1, min(len(closable_facilities), 2))
+        # if len(closable_facilities) > 13:
+        #     opened_facilities_count = 1
+        #     closed_facilities_count = 2
         # list of indices of facilities that open/close
+        # if random.random() < 0.3:
+        #     opened_facilities = random.choices(
+        #         openable_facilities, weights=openable_ratios, k=opened_facilities_count)
+        #     closed_facilities = random.choices(
+        #         closable_facilities, weights=closable_ratios, k=closed_facilities_count)
+        #     if len(opened_facilities) == 2 and opened_facilities[0] == opened_facilities[1]:
+        #         opened_facilities.pop(1)
+        #     if len(closed_facilities) == 2 and closed_facilities[0] == closed_facilities[1]:
+        #         closed_facilities.pop(1)
+        # opened_facilities = [d[0]
+        #                      for d in openable_ratios[0:opened_facilities_count]]
+        # closed_facilities = [d[0]
+        #                      for d in closable_ratios[0:closed_facilities_count]]
+        #print("opened:", opened_facilities)
+        #print("closed:", closed_facilities)
+        # else:
         opened_facilities = random.sample(
             openable_facilities, opened_facilities_count)
         closed_facilities = random.sample(
@@ -368,6 +425,16 @@ def facility_movement(x, y, travel_cost):
             if ybar[j] == 1 and capacity_constraint < capacity[j] and demand_constraint < demand[i]:
                 xbar[i][j] = min(capacity[j] - capacity_constraint,
                                  demand[i] - demand_constraint)
+
+    # print(ybar)
+    # for i in range(len(ybar)):
+    #     #print([xbar[k][i] for k in range(len(xbar))])
+    #     if ybar[i] == 1 and sum(xbar[k][i] for k in range(len(xbar))) == 0:
+    #         ybar[i] = 0
+    # print("YBAR:", ybar)
+    # print([xbar[k][17] for k in range(len(xbar))])
+
+    #print(compute_obj_value(xbar, ybar))
     #print(check_validity(xbar, ybar))
     return xbar, ybar
 
