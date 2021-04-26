@@ -226,7 +226,7 @@ def local_search_flp(x, y):
     # past_results = []
     past_results = set()
     non_tabu_count = 0
-    default_probability = 0.8
+    default_probability = 0.9
     eps = default_probability
     eps_decay = 0.9
     random.seed(6)
@@ -234,22 +234,23 @@ def local_search_flp(x, y):
     facility_moves, assignment_moves = 0, 0
     while time.time() - start_time < 20:
         if random.random() < eps:
-            xbar, ybar = facility_movement(
+            xbar_test, ybar_test = assignment_movement(xbar.copy(), ybar.copy())
+            assignment_moves += 1
+        else:
+            xbar_test, ybar_test = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
             facility_moves += 1
-        else:
-            xbar, ybar = assignment_movement(xbar.copy(), ybar.copy())
-            assignment_moves += 1
-        if (tuple([tuple(i) for i in xbar]), tuple(ybar)) not in past_results:
-            past_results.add((tuple([tuple(i) for i in xbar]), tuple(ybar)))
-            obj_bar = compute_obj_value(xbar, ybar)
+        if (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)) not in past_results:
+            past_results.add((tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)))
+            obj_bar = compute_obj_value(xbar_test, ybar_test)
             if obj_bar < best_obj:
+                print(obj_bar)
                 best_x = copy.deepcopy(xbar)
                 # best_x = xbar[:][:]
+                xbar, ybar = xbar_test, ybar_test
                 best_y = ybar.copy()
                 best_obj = obj_bar
                 # print("VERIF", check_validity(best_x, best_y))
-                eps *= eps_decay
             else:
                 stuck += 1
                 if stuck > 5:
@@ -258,6 +259,7 @@ def local_search_flp(x, y):
             non_tabu_count += 1
         else:
             tabu_count += 1
+        eps *= eps_decay
     print(f"Facility moves : {facility_moves}")
     print(f"Assignment moves : {assignment_moves}")
     print("Tabu :", tabu_count)
@@ -267,7 +269,7 @@ def local_search_flp(x, y):
 
 
 def assignment_movement(x, y):
-    xbar, ybar = x[:], y[:]
+    xbar, ybar = copy.deepcopy(x), copy.deepcopy(y)
     demand, capacity, travel_cost = instance.demand, instance.capacity, instance.travel_cost_matrix
     nb_customers = random.randint(1, 2)
     customers = random.sample(range(len(demand)), nb_customers)
@@ -326,7 +328,7 @@ def assignment_movement(x, y):
     #     #print([xbar[k][i] for k in range(len(xbar))])
     #     if ybar[i] == 1 and sum(xbar[k][i] for k in range(len(xbar))) == 0:
     #         ybar[i] = 0
-    print(compute_obj_value(xbar, ybar))
+    # print(compute_obj_value(xbar, ybar))
     return xbar, ybar
 
 
@@ -401,7 +403,7 @@ def facility_movement(x, y, travel_cost):
         if amount_sum <= capacity_sum:
             break
     # greedy reassign
-    xbar, ybar = x[:], y[:]
+    xbar, ybar = copy.deepcopy(x), copy.deepcopy(y)
     for j_plus in opened_facilities:
         ybar[j_plus] = 1
     for j_minus in closed_facilities:
