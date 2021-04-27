@@ -96,6 +96,18 @@ def greedy_optimality_gap():
     comp_df["Optimality gap"] = (comp_df["Solution_greedy"] - comp_df["Solution_int"]) / comp_df["Solution_int"]
     print(comp_df.to_latex())
 
+def plot_best_solution_evolution(*filenames: str):
+    plt.title("Evolution of best solution during local search")
+    plt.ylabel("Best objective value (over 10000)")
+    plt.xlabel("Time (s)")
+    for filename in filenames:
+        sol_df = pd.read_csv(filename)
+        plt.plot(sol_df["Timestamp"], sol_df["ObjValue"]/1e5, label=filename.split(".txt")[0])
+    plt.tight_layout()
+    plt.legend()
+    plt.show()
+
+
 
 
 if __name__ == "__main__":
@@ -104,4 +116,5 @@ if __name__ == "__main__":
     # print_filtered_lp()
     # timout_count()
     # timout_count_ij()
-    greedy_optimality_gap()
+    # greedy_optimality_gap()
+    plot_best_solution_evolution("FLP-250-100-0.txt_best_history.csv", "FLP-250-100-1.txt_best_history.csv")
