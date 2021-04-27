@@ -214,14 +214,12 @@ def travel_cost_to_matrix(nb_facilities, nb_clients, travel_cost_dict):
 
 
 def local_search_flp(x, y):
-    demand, capacity, travel_cost, opening_cost = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost
-    travel_cost_matrix = travel_cost_to_matrix(
-        len(capacity), len(demand), travel_cost)
+    demand, capacity, travel_cost, opening_cost, travel_cost_matrix = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost, instance.travel_cost_matrix
     start_time = time.time()
     tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
     # print(check_validity(xbar, ybar))
-    best_x, best_y = copy.deepcopy(x.copy()), y.copy()
+    best_x, best_y = copy.deepcopy(x), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
     # past_results = []
     past_results = set()
@@ -231,27 +229,35 @@ def local_search_flp(x, y):
     eps_decay = 0.9
     random.seed(6)
     stuck = 0
+    no_improve = 0
     facility_moves, assignment_moves = 0, 0
-    while time.time() - start_time < 20:
+    while time.time() - start_time < 30*60:
         if random.random() < eps:
-            xbar_test, ybar_test = assignment_movement(xbar.copy(), ybar.copy())
+            xbar_test, ybar_test = assignment_movement(
+                xbar.copy(), ybar.copy())
             assignment_moves += 1
         else:
             xbar_test, ybar_test = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
             facility_moves += 1
         if (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)) not in past_results:
-            past_results.add((tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)))
+            past_results.add(
+                (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)))
             obj_bar = compute_obj_value(xbar_test, ybar_test)
             if obj_bar < best_obj:
-                print(obj_bar)
-                best_x = copy.deepcopy(xbar)
+                # print(obj_bar)
+                no_improve = 0
+                best_x, best_y = copy.deepcopy(xbar_test), ybar_test.copy()
                 # best_x = xbar[:][:]
-                xbar, ybar = xbar_test, ybar_test
-                best_y = ybar.copy()
+                xbar, ybar = copy.deepcopy(xbar_test), ybar_test.copy()
                 best_obj = obj_bar
                 # print("VERIF", check_validity(best_x, best_y))
             else:
+                no_improve += 1
+                if no_improve > 2000:
+                    xbar, ybar = copy.deepcopy(
+                        xbar_test), copy.deepcopy(ybar_test)
+                    no_improve = 0
                 stuck += 1
                 if stuck > 5:
                     eps = default_probability
@@ -463,9 +469,9 @@ if __name__ == "__main__":
     # print(y)
 
     # Global variable corresponding to the instance
-    instance = Instance("FLP-100-20-0.txt")
+    instance = Instance("FLP-250-50-1.txt")
 
-    obj, x, y = initial_solution_flp("FLP-100-20-0.txt")
+    obj, x, y = initial_solution_flp("FLP-250-50-1.txt")
     obj_sol, x_sol, y_sol = local_search_flp(x, y)
     print("Solution :", obj_sol)
     print("Valid :", check_validity(x_sol, y_sol))
