@@ -215,7 +215,7 @@ def travel_cost_to_matrix(nb_facilities, nb_clients, travel_cost_dict):
 
 def local_search_flp(x, y):
     demand, capacity, travel_cost, opening_cost, travel_cost_matrix = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost, instance.travel_cost_matrix
-    start_time = time.time()
+    start_time = time.process_time()
     tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
     # print(check_validity(xbar, ybar))
@@ -231,7 +231,7 @@ def local_search_flp(x, y):
     stuck = 0
     no_improve = 0
     facility_moves, assignment_moves = 0, 0
-    while time.time() - start_time < 30*60:
+    while time.process_time() - start_time < 30*60:
         if random.random() < eps:
             xbar_test, ybar_test = assignment_movement(
                 xbar.copy(), ybar.copy())
@@ -469,9 +469,16 @@ if __name__ == "__main__":
     # print(y)
 
     # Global variable corresponding to the instance
-    instance = Instance("FLP-250-50-1.txt")
+    instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
+                         "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
+    output_file = open("algo_measures.csv", "w")
+    output_file.write("instance,solution\n")
+    for i in instances_to_test:
+        instance = Instance(i)
 
-    obj, x, y = initial_solution_flp("FLP-250-50-1.txt")
-    obj_sol, x_sol, y_sol = local_search_flp(x, y)
-    print("Solution :", obj_sol)
-    print("Valid :", check_validity(x_sol, y_sol))
+        obj, x, y = initial_solution_flp(i)
+        obj_sol, x_sol, y_sol = local_search_flp(x, y)
+        print("Solution :", obj_sol)
+        print("Valid :", check_validity(x_sol, y_sol))
+        output_file.write(i + "," + str(obj_sol) + "\n")
+    output_file.close()
