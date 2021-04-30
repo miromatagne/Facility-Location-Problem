@@ -232,7 +232,7 @@ def local_search_flp(x, y):
     stuck = 0
     no_improve = 0
     facility_moves, assignment_moves = 0, 0
-    while time.process_time() - start_time < 10:
+    while time.process_time() - start_time < 30*60:
         if random.random() < eps:
             xbar_test, ybar_test = assignment_movement(
                 xbar.copy(), ybar.copy())
