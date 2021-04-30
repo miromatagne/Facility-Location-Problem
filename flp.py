@@ -4,6 +4,8 @@ import pyomo.environ as pyo
 import time
 import copy
 
+instance = None
+
 
 class Instance:
     def __init__(self, file_name):
@@ -11,7 +13,7 @@ class Instance:
         self.opening_cost, self.demand, self.capacity, self.travel_cost = read_instance(
             file_name)
 
-        # Compute the travel cost matric of the instance
+        # Compute the travel cost matrix of the instance
         self.travel_cost_matrix = travel_cost_to_matrix(
             len(self.capacity), len(self.demand), self.travel_cost)
 
@@ -73,7 +75,9 @@ def solve_flp(instance_name, linear):
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
-    # opening_cost, demand, capacity, travel_cost = read_instance(instance_name)
+    global instance
+
+    instance = Instance(instance_name)
     opening_cost, demand, capacity, travel_cost = instance.opening_cost, instance.demand, instance.capacity, instance.travel_cost
     model = pyo.ConcreteModel()
 
@@ -139,7 +143,6 @@ def initial_solution_flp(instance_name):
     xbar = [[0 for j in range(len(capacity))] for i in range(len(demand))]
     ybar = [0 for j in range(len(capacity))]
 
-    # TODO: check if ok because solve_flp re-reads the file again (waste)
     # Solve the LP Relaxation of the FLP instance, x_star and y_star are the optimal solutions
     _, x_star, y_star = solve_flp(instance_name, True)
 
@@ -218,10 +221,8 @@ def local_search_flp(x, y):
     start_time = time.process_time()
     tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
-    # print(check_validity(xbar, ybar))
     best_x, best_y = copy.deepcopy(x), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
-    # past_results = []
     past_results = set()
     non_tabu_count = 0
     default_probability = 0.9
@@ -231,7 +232,7 @@ def local_search_flp(x, y):
     stuck = 0
     no_improve = 0
     facility_moves, assignment_moves = 0, 0
-    while time.process_time() - start_time < 30*60:
+    while time.process_time() - start_time < 10:
         if random.random() < eps:
             xbar_test, ybar_test = assignment_movement(
                 xbar.copy(), ybar.copy())
@@ -245,13 +246,10 @@ def local_search_flp(x, y):
                 (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)))
             obj_bar = compute_obj_value(xbar_test, ybar_test)
             if obj_bar < best_obj:
-                # print(obj_bar)
                 no_improve = 0
                 best_x, best_y = copy.deepcopy(xbar_test), ybar_test.copy()
-                # best_x = xbar[:][:]
                 xbar, ybar = copy.deepcopy(xbar_test), ybar_test.copy()
                 best_obj = obj_bar
-                # print("VERIF", check_validity(best_x, best_y))
             else:
                 no_improve += 1
                 if no_improve > 2000:
@@ -266,11 +264,10 @@ def local_search_flp(x, y):
         else:
             tabu_count += 1
         eps *= eps_decay
-    print(f"Facility moves : {facility_moves}")
-    print(f"Assignment moves : {assignment_moves}")
-    print("Tabu :", tabu_count)
-    print("Non tabu :", non_tabu_count)
-    # print(past_results)
+    #print(f"Facility moves : {facility_moves}")
+    #print(f"Assignment moves : {assignment_moves}")
+    #print("Tabu :", tabu_count)
+    #print("Non tabu :", non_tabu_count)
     return best_obj, best_x, best_y
 
 
@@ -285,15 +282,10 @@ def assignment_movement(x, y):
         used_facilities = [k for k in range(len(x[i])) if x[i][k] > 0]
         nb_facilities = random.randint(1, min(len(used_facilities), 2))
         facilities = random.sample(used_facilities, nb_facilities)
-        # print(x[i])
-        # print(len(used_facilities))
         for j in facilities:
-            # print(x[i][j])
             chosen_demands[i].append((i, j))
-    # print(chosen_demands)
 
     for c in chosen_demands:
-        # print(c)
         if len(chosen_demands[c]) > 0:
             for d in chosen_demands[c]:
                 opened_facilities = [i for i in range(len(y)) if y[i] == 1]
@@ -301,101 +293,41 @@ def assignment_movement(x, y):
                     opened_facilities.remove(d[1])
                 remaining_demand = x[d[0]][d[1]]
                 while remaining_demand != 0 and len(opened_facilities) > 0:
-                    # print("remaining_demand", remaining_demand)
                     if random.random() < 0.5:
                         opened_facilities_weights = [
                             1/travel_cost[d[0]][i] for i in opened_facilities]
-                        # print(opened_facilities_weights)
                         new_facility = random.choices(
                             opened_facilities, weights=opened_facilities_weights, k=1)
                     else:
                         new_facility = random.sample(opened_facilities, 1)
                     new_facility = new_facility[0]
-                    # print(new_facility)
                     capacity_constraint = sum(
                         xbar[k][new_facility] for k in range(len(xbar)))
-                    # print("capacity_constraint", capacity_constraint)
-                    # print("capacity", capacity[new_facility])
                     if capacity_constraint < capacity[new_facility]:
-                        # print(xbar[d[0]][new_facility])
-                        # print(xbar[d[0]][d[1]])
                         amount_realloc = min(
                             capacity[new_facility] - capacity_constraint, remaining_demand)
-                        # print("REALLOC", amount_realloc)
                         xbar[d[0]][new_facility] += amount_realloc
                         xbar[d[0]][d[1]] -= amount_realloc
-                        # print(xbar[d[0]][new_facility])
-                        # print(xbar[d[0]][d[1]])
                         remaining_demand -= amount_realloc
                     else:
                         opened_facilities.remove(new_facility)
-
-    # for i in range(len(ybar)):
-    #     #print([xbar[k][i] for k in range(len(xbar))])
-    #     if ybar[i] == 1 and sum(xbar[k][i] for k in range(len(xbar))) == 0:
-    #         ybar[i] = 0
-    # print(compute_obj_value(xbar, ybar))
     return xbar, ybar
 
 
 def facility_movement(x, y, travel_cost):
-    # for i in range(len(y)):
-    #     print("X", [x[k][i] for k in range(len(x))])
-    # print("Y", y)
-    # print("X", [x[k][17] for k in range(len(x))])
-
     demand, capacity, opening_cost = instance.demand, instance.capacity, instance.opening_cost
     openable_facilities = [i for i in range(len(y)) if y[i] == 0]
     closable_facilities = [i for i in range(len(y)) if y[i] == 1]
-    # for i in closable_facilities:
-    # print(sum(x[j][i] for j in range(len(x))))
-    # print('index', i)
-
-    # print(y[8])
-    # print([x[j][8] for j in range(len(x))])
     if len(openable_facilities) == 0:
         # we can not open any facility
         return None
-    # Ratio opening_cost/capacity
-    closable_ratios = [capacity[i]/max(sum(x[j][i] for j in range(len(x))), 1)
-                       for i in closable_facilities]
-    openable_ratios = [capacity[i]/opening_cost[i]
-                       for i in openable_facilities]
 
-    #openable_ratios = [(i, (sum(x[j][i] for j in range(len(x))))/capacity[i]) for i in openable_facilities]
-    # closable_ratios = [(sum(x[j][i] for j in range(len(x))))/capacity[i]
-    #                    for i in closable_facilities]
-
-    # openable_ratios.sort(key=lambda tup: tup[1])
-    # closable_ratios.sort(key=lambda tup: tup[1])
-    # print(openable_ratios)
-    # print(closable_ratios)
     while True:
         # choose randomly the number of facilities we open or close
         opened_facilities_count = random.randint(
             1, min(len(openable_facilities), 2))
         closed_facilities_count = random.randint(
             1, min(len(closable_facilities), 2))
-        # if len(closable_facilities) > 13:
-        #     opened_facilities_count = 1
-        #     closed_facilities_count = 2
-        # list of indices of facilities that open/close
-        # if random.random() < 0.3:
-        #     opened_facilities = random.choices(
-        #         openable_facilities, weights=openable_ratios, k=opened_facilities_count)
-        #     closed_facilities = random.choices(
-        #         closable_facilities, weights=closable_ratios, k=closed_facilities_count)
-        #     if len(opened_facilities) == 2 and opened_facilities[0] == opened_facilities[1]:
-        #         opened_facilities.pop(1)
-        #     if len(closed_facilities) == 2 and closed_facilities[0] == closed_facilities[1]:
-        #         closed_facilities.pop(1)
-        # opened_facilities = [d[0]
-        #                      for d in openable_ratios[0:opened_facilities_count]]
-        # closed_facilities = [d[0]
-        #                      for d in closable_ratios[0:closed_facilities_count]]
-        #print("opened:", opened_facilities)
-        #print("closed:", closed_facilities)
-        # else:
         opened_facilities = random.sample(
             openable_facilities, opened_facilities_count)
         closed_facilities = random.sample(
@@ -434,16 +366,6 @@ def facility_movement(x, y, travel_cost):
                 xbar[i][j] = min(capacity[j] - capacity_constraint,
                                  demand[i] - demand_constraint)
 
-    # print(ybar)
-    # for i in range(len(ybar)):
-    #     #print([xbar[k][i] for k in range(len(xbar))])
-    #     if ybar[i] == 1 and sum(xbar[k][i] for k in range(len(xbar))) == 0:
-    #         ybar[i] = 0
-    # print("YBAR:", ybar)
-    # print([xbar[k][17] for k in range(len(xbar))])
-
-    #print(compute_obj_value(xbar, ybar))
-    #print(check_validity(xbar, ybar))
     return xbar, ybar
 
 
@@ -460,7 +382,7 @@ def check_validity(x, y):
     return True
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # print(read_instance("FLP-100-20-0.txt"))
     # if len(sys.argv) != 3:
     #     print("Usage: flp.py <filename> <solving option>")
@@ -469,16 +391,16 @@ if __name__ == "__main__":
     # print(y)
 
     # Global variable corresponding to the instance
-    instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
-                         "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
-    output_file = open("algo_measures.csv", "w")
-    output_file.write("instance,solution\n")
-    for i in instances_to_test:
-        instance = Instance(i)
+    # instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
+    #                      "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
+    # output_file = open("algo_measures.csv", "w")
+    # output_file.write("instance,solution\n")
+    # for i in instances_to_test:
+    #     instance = Instance(i)
 
-        obj, x, y = initial_solution_flp(i)
-        obj_sol, x_sol, y_sol = local_search_flp(x, y)
-        print("Solution :", obj_sol)
-        print("Valid :", check_validity(x_sol, y_sol))
-        output_file.write(i + "," + str(obj_sol) + "\n")
-    output_file.close()
+    #     obj, x, y = initial_solution_flp(i)
+    #     obj_sol, x_sol, y_sol = local_search_flp(x, y)
+    #     print("Solution :", obj_sol)
+    #     print("Valid :", check_validity(x_sol, y_sol))
+    #     output_file.write(i + "," + str(obj_sol) + "\n")
+    # output_file.close()
