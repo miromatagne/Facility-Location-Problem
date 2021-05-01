@@ -56,14 +56,23 @@ def read_instance(file_name: str) -> tuple[dict[int, int], dict[int, int], dict[
 
 
 def obj_expression(m):
+    """
+        Objective function of the FLP 
+    """
     return pyo.summation(m.f, m.y) + pyo.summation(m.t, m.x)
 
 
 def constraint_rule_2(m, j):
+    """
+        Constraint number 2 of the FLP
+    """
     return sum(m.x[i, j] for i in m.I) <= m.c[j] * m.y[j]
 
 
 def constraint_rule_3(m, i):
+    """
+        Constraint number 3 of the FLP
+    """
     return sum(m.x[i, j] for j in m.J) >= m.d[i]
 
 
@@ -121,6 +130,7 @@ def solve_flp(instance_name: str, linear: bool, time_limit: int = 600) -> tuple[
     print(f"Final solution: {obj}")
 
     x = []
+    # Transform x into a list of lists and y into a list
     for i in range(len(demand)):
         sublist = list(model.x[i, :].value)
         x.append(sublist)
@@ -226,13 +236,13 @@ def travel_cost_to_matrix(nb_facilities: int, nb_clients: int, travel_cost_dict:
 
 def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Optional[int], list[list], list]:
     """
-    Performs a local search.
+        Performs a local search.
 
-    :param x: x value to search from
-    :param y: y value to search from
-    :param time_limit: time limit for search, by default 30 minutes
-    :return: (obj,x,y) where obj is the objective function corresponding
-                 to the solutions x and y
+        :param x: x value to search from
+        :param y: y value to search from
+        :param time_limit: time limit for search, by default 30 minutes
+        :return: (obj,x,y) where obj is the objective function corresponding
+                    to the solutions x and y
     """
     global instance
     assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
@@ -244,12 +254,12 @@ def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Op
     xbar, ybar = copy.deepcopy(x), y.copy()
     best_x, best_y = copy.deepcopy(x), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
-    # Set of past result for Tabu Search
+    # Set of past results for Tabu Search
     past_results = set()
     default_probability = 0.9
     # Epsilon parameter for evolving probability
     eps = default_probability
-    # Epsilon decay factor that multiplies epsilon
+    # Epsilon decay : factor that multiplies epsilon
     eps_decay = 0.9
     random.seed(6)
     # Number of times we did not improve, split in two variables
@@ -286,7 +296,8 @@ def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Op
             else:
                 no_improve += 1
                 if no_improve > 2000:
-                    # next starting point is the current solution
+                    # next starting point is the current solution if no improving solution
+                    # was found for 2000 moves
                     xbar, ybar = copy.deepcopy(
                         xbar_test), copy.deepcopy(ybar_test)
                     no_improve = 0
@@ -309,19 +320,21 @@ def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Op
 
 def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
     """
-    Performs an assignment movement.
+        Performs an assignment movement.
 
-    :param x: x value to move from
-    :param y: y value to move from
-    :return: new x,y solution pair
+        :param x: x value to move from
+        :param y: y value to move from
+        :return: new x,y solution pair
     """
     global instance
     assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     xbar, ybar = copy.deepcopy(x), copy.deepcopy(y)
     demand, capacity, travel_cost = instance.demand, instance.capacity, instance.travel_cost_matrix
+    # Choose randomly 1 or 2 customers (clients) that will be affected by the assignment movement
     nb_customers = random.randint(1, 2)
     customers = random.sample(range(len(demand)), nb_customers)
     chosen_demands = {}
+    # For each customer, choose at most 2 facilities that currently deliver this customer
     for i in customers:
         chosen_demands[i] = []
         used_facilities = [k for k in range(len(x[i])) if x[i][k] > 0]
@@ -330,22 +343,31 @@ def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
         for j in facilities:
             chosen_demands[i].append((i, j))
 
+    # Reallocate each demand to facilities that were previously open
     for c in chosen_demands:
         if len(chosen_demands[c]) > 0:
             for d in chosen_demands[c]:
+                # List of open facilities
                 opened_facilities = [i for i in range(len(y)) if y[i] == 1]
+                # Can't reallocate demand to itself
                 if d[1] in opened_facilities:
                     opened_facilities.remove(d[1])
                 remaining_demand = x[d[0]][d[1]]
                 while remaining_demand != 0 and len(opened_facilities) > 0:
+                    # With 50% chance, reallocate greedily the demands
                     if random.random() < 0.5:
+                        # Weights : a maxmial weight corresponds to a cheaper solution
                         opened_facilities_weights = [
                             1 / travel_cost[d[0]][i] for i in opened_facilities]
+                        # Choose the new facilities based on the weights
                         new_facility = random.choices(
                             opened_facilities, weights=opened_facilities_weights, k=1)
+                    # With 50% chance, reallocate randomly the demand to open facilities
                     else:
                         new_facility = random.sample(opened_facilities, 1)
+
                     new_facility = new_facility[0]
+                    # Verify the capacity constraint
                     capacity_constraint = sum(
                         xbar[k][new_facility] for k in range(len(xbar)))
                     if capacity_constraint < capacity[new_facility]:
@@ -361,24 +383,25 @@ def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
 
 def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> Optional[tuple[list[list], list]]:
     """
-    Performs a facility movement.
+        Performs a facility movement.
 
-    :param x: x value to move from
-    :param y: y value to move from
-    :param travel_cost: travel cost matrix
-    :return: new x,y solution pair
+        :param x: x value to move from
+        :param y: y value to move from
+        :param travel_cost: travel cost matrix
+        :return: new x,y solution pair
     """
     global instance
     assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     demand, capacity, opening_cost = instance.demand, instance.capacity, instance.opening_cost
+    # Lists of facilities that can be opened or closed
     openable_facilities = [i for i in range(len(y)) if y[i] == 0]
     closable_facilities = [i for i in range(len(y)) if y[i] == 1]
     if len(openable_facilities) == 0:
-        # we can not open any facility
+        # We can not open any facility
         return None
 
     while True:
-        # choose randomly the number of facilities we open or close
+        # Choose randomly the number of facilities we open or close
         opened_facilities_count = random.randint(
             1, min(len(openable_facilities), 2))
         closed_facilities_count = random.randint(
@@ -388,6 +411,7 @@ def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> O
         closed_facilities = random.sample(
             closable_facilities, closed_facilities_count)
         amount_sum = 0
+        # Compute the total demand to reallocate
         for j_minus in closed_facilities:
             amount_sum += sum(x[k][j_minus] for k in range(len(x)))
         capacity_sum = 0
@@ -395,7 +419,7 @@ def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> O
             capacity_sum += capacity[j_plus]
         if amount_sum <= capacity_sum:
             break
-    # greedy reassign
+    # Greedy reassign
     xbar, ybar = copy.deepcopy(x), copy.deepcopy(y)
     for j_plus in opened_facilities:
         ybar[j_plus] = 1
@@ -426,11 +450,11 @@ def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> O
 
 def check_validity(x: list[list], y: list) -> bool:
     """
-    Checks that the given solution is valid.
+        Helper function useful for debugging, checks that the given solution is valid.
 
-    :param x: x variables values
-    :param y: y variables values
-    :return: True if solution is valid, False otherwise
+        :param x: x variables values
+        :param y: y variables values
+        :return: True if solution is valid, False otherwise
     """
     global instance
     assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
@@ -444,26 +468,3 @@ def check_validity(x: list[list], y: list) -> bool:
         if demand_constraint < demand[i]:
             return False
     return True
-
-# if __name__ == "__main__":
-# print(read_instance("FLP-100-20-0.txt"))
-# if len(sys.argv) != 3:
-#     print("Usage: flp.py <filename> <solving option>")
-#     exit(1)
-# obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
-# print(y)
-
-# Global variable corresponding to the instance
-# instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
-#                      "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
-# output_file = open("algo_measures.csv", "w")
-# output_file.write("instance,solution\n")
-# for i in instances_to_test:
-#     instance = Instance(i)
-
-#     obj, x, y = initial_solution_flp(i)
-#     obj_sol, x_sol, y_sol = local_search_flp(x, y)
-#     print("Solution :", obj_sol)
-#     print("Valid :", check_validity(x_sol, y_sol))
-#     output_file.write(i + "," + str(obj_sol) + "\n")
-# output_file.close()
