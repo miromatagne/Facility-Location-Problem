@@ -424,7 +424,14 @@ def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> O
     return xbar, ybar
 
 
-def check_validity(x, y):
+def check_validity(x: list[list], y: list) -> bool:
+    """
+    Checks that the given solution is valid.
+
+    :param x: x variables values
+    :param y: y variables values
+    :return: True if solution is valid, False otherwise
+    """
     global instance
     assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     demand, capacity = instance.demand, instance.capacity
