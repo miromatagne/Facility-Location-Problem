@@ -1,5 +1,5 @@
 import random
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 import pyomo.environ as pyo
 import time
@@ -20,9 +20,9 @@ class Instance:
 instance: Instance = None
 
 
-def read_instance(file_name: str) -> tuple[dict[int, int], dict[int, int], dict[int, int], dict[tuple[int, int], int]]:
+def read_instance(file_name: str) -> Tuple[Dict[int, int], Dict[int, int], Dict[int, int], Dict[Tuple[int, int], int]]:
     """
-        Reads the problem instance and extracts all the usefuk information from the
+        Reads the problem instance and extracts all the useful information from the
         instance file.
 
         :param file_name: name of the instance file to be read
@@ -76,7 +76,7 @@ def constraint_rule_3(m, i):
     return sum(m.x[i, j] for j in m.J) >= m.d[i]
 
 
-def solve_flp(instance_name: str, linear: bool, time_limit: int = 600) -> tuple[float, list[list], list]:
+def solve_flp(instance_name: str, linear: bool, time_limit: int = 600) -> Tuple[float, List[List[int]], List[int]]:
     """
         Solve an FLP instance using the GLPK solver. The solution can either
         be an integer solution or an LP relaxation.
@@ -140,7 +140,7 @@ def solve_flp(instance_name: str, linear: bool, time_limit: int = 600) -> tuple[
     return obj, x, y
 
 
-def initial_solution_flp(instance_name: str) -> Optional[tuple[float, list[list[int]], list[int]]]:
+def initial_solution_flp(instance_name: str) -> Optional[Tuple[float, List[List[int]], List[int]]]:
     """
         Computes an initial feasible integer solution to the FLP instance
         using a greedy algorithm.
@@ -197,7 +197,7 @@ def initial_solution_flp(instance_name: str) -> Optional[tuple[float, list[list[
     return None
 
 
-def compute_obj_value(x: list[list], y: list) -> Optional[int]:
+def compute_obj_value(x: List[List[int]], y: List[int]) -> Optional[int]:
     """
         Computes the objective value of a solution (x,y)
 
@@ -217,7 +217,7 @@ def compute_obj_value(x: list[list], y: list) -> Optional[int]:
     return obj
 
 
-def travel_cost_to_matrix(nb_facilities: int, nb_clients: int, travel_cost_dict: dict) -> list[list[int]]:
+def travel_cost_to_matrix(nb_facilities: int, nb_clients: int, travel_cost_dict: Dict[Tuple[int, int], int]) -> List[List[int]]:
     """
         Converts the travel cost dictionary into a matrix, for more efficient computations
         of the objective function.
@@ -234,7 +234,7 @@ def travel_cost_to_matrix(nb_facilities: int, nb_clients: int, travel_cost_dict:
     return travel_cost_matrix
 
 
-def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Optional[int], list[list], list]:
+def local_search_flp(x: List[List[int]], y: List[int], time_limit: int = 1800) -> Tuple[Optional[int], List[List[int]], List[int]]:
     """
         Performs a local search.
 
@@ -318,7 +318,7 @@ def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Op
     return best_obj, best_x, best_y
 
 
-def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
+def assignment_movement(x: List[List[int]], y: List[int]) -> Tuple[List[List[int]], List[int]]:
     """
         Performs an assignment movement.
 
@@ -381,7 +381,7 @@ def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
     return xbar, ybar
 
 
-def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> Optional[tuple[list[list], list]]:
+def facility_movement(x: List[List[int]], y: List[int], travel_cost: List[List[int]]) -> Optional[Tuple[List[List[int]], List[int]]]:
     """
         Performs a facility movement.
 
@@ -448,7 +448,7 @@ def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> O
     return xbar, ybar
 
 
-def check_validity(x: list[list], y: list) -> bool:
+def check_validity(x: List[List[int]], y: List[int]) -> bool:
     """
         Helper function useful for debugging, checks that the given solution is valid.
 
