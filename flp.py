@@ -1,14 +1,13 @@
 import random
+from typing import Optional
 
 import pyomo.environ as pyo
 import time
 import copy
 
-instance = None
-
 
 class Instance:
-    def __init__(self, file_name):
+    def __init__(self, file_name: str):
         # Store all the attributes of the instance
         self.opening_cost, self.demand, self.capacity, self.travel_cost = read_instance(
             file_name)
@@ -18,7 +17,10 @@ class Instance:
             len(self.capacity), len(self.demand), self.travel_cost)
 
 
-def read_instance(file_name):
+instance: Instance = None
+
+
+def read_instance(file_name: str) -> tuple[dict[int, int], dict[int, int], dict[int, int], dict[tuple[int, int], int]]:
     """
         Reads the problem instance and extracts all the usefuk information from the
         instance file.
@@ -65,13 +67,14 @@ def constraint_rule_3(m, i):
     return sum(m.x[i, j] for j in m.J) >= m.d[i]
 
 
-def solve_flp(instance_name, linear):
+def solve_flp(instance_name: str, linear: bool, time_limit: int = 600) -> tuple[float, list[list], list]:
     """
         Solve an FLP instance using the GLPK solver. The solution can either
         be an integer solution or an LP relaxation.
 
         :param instance_name: name of the FLP instance to solve
         :param linear: True if we wish to solve the LP relaxation
+        :param time_limit: time limit for solving, by default 10 minutes
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
@@ -107,12 +110,11 @@ def solve_flp(instance_name, linear):
     model.constraint3 = pyo.Constraint(model.I, rule=constraint_rule_3)
 
     # Optimizer
-    TIME_LIMIT = 600
     opt = pyo.SolverFactory('glpk')
-    opt.options['tmlim'] = TIME_LIMIT
+    opt.options['tmlim'] = time_limit
     start = time.time()
+    results = opt.solve(model, tee=True, timelimit=time_limit)
     # reset timer as problem has been solved
-    results = opt.solve(model, tee=True, timelimit=TIME_LIMIT)
     end = time.time()
     obj = pyo.value(model.obj)
     print(f"Resolution time: {end - start}")
@@ -125,10 +127,10 @@ def solve_flp(instance_name, linear):
 
     y = list(model.y[:].value)
 
-    return (obj, x, y)
+    return obj, x, y
 
 
-def initial_solution_flp(instance_name):
+def initial_solution_flp(instance_name: str) -> Optional[tuple[float, list[list[int]], list[int]]]:
     """
         Computes an initial feasible integer solution to the FLP instance
         using a greedy algorithm.
@@ -137,6 +139,9 @@ def initial_solution_flp(instance_name):
         :return: (obj,x,y) where obj is the objective function corresponding
                  to the solutions x and y
     """
+    global instance
+    if instance is None:
+        instance = Instance(instance_name)
     opening_cost, demand, capacity, travel_cost = instance.opening_cost, instance.demand, instance.capacity, instance.travel_cost_matrix
 
     # Initialize xbar and ybar to 0's
@@ -176,13 +181,13 @@ def initial_solution_flp(instance_name):
         if all([sum([xbar[i][j] for j in range(len(capacity))]) >= demand[i] for i in range(len(demand))]):
             # Compute both operands of the objective function
             obj = compute_obj_value(xbar, ybar)
-            return (obj, xbar, ybar)
+            return obj, xbar, ybar
 
     # Return None if no feasible integer solution exists
     return None
 
 
-def compute_obj_value(x, y):
+def compute_obj_value(x: list[list], y: list) -> Optional[int]:
     """
         Computes the objective value of a solution (x,y)
 
@@ -190,6 +195,9 @@ def compute_obj_value(x, y):
         :param y: values of the yj variables
         :return: value of the objective function
     """
+    global instance
+    if instance is None:
+        return None
     travel_cost_matrix, opening_cost = instance.travel_cost_matrix, instance.opening_cost
     sum_y = sum(i[0] * i[1]
                 for i in zip(y, list(opening_cost.values())))
@@ -199,79 +207,116 @@ def compute_obj_value(x, y):
     return obj
 
 
-def travel_cost_to_matrix(nb_facilities, nb_clients, travel_cost_dict):
+def travel_cost_to_matrix(nb_facilities: int, nb_clients: int, travel_cost_dict: dict) -> list[list[int]]:
     """
-        Converts the travel cost dictionnary into a matrix, for more efficient computations
+        Converts the travel cost dictionary into a matrix, for more efficient computations
         of the objective function.
 
         :param nb_facilities: number of facilities
         :param nb_clients: number of clients
-        :param travel_cost_dict: dictionnary containing the travel costs
-        :return: the 2D matric corresponding to the travel costs
+        :param travel_cost_dict: dictionary containing the travel costs
+        :return: the 2D matrix corresponding to the travel costs
     """
     travel_cost_matrix = [
-        [0 for j in range(nb_facilities)] for i in range(nb_clients)]
+        [0 for _ in range(nb_facilities)] for _ in range(nb_clients)]
     for key in travel_cost_dict:
         travel_cost_matrix[key[0]][key[1]] = travel_cost_dict[key]
     return travel_cost_matrix
 
 
-def local_search_flp(x, y):
+def local_search_flp(x: list[list], y: list, time_limit: int = 1800) -> tuple[Optional[int], list[list], list]:
+    """
+    Performs a local search.
+
+    :param x: x value to search from
+    :param y: y value to search from
+    :param time_limit: time limit for search, by default 30 minutes
+    :return: (obj,x,y) where obj is the objective function corresponding
+                 to the solutions x and y
+    """
+    global instance
+    assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     demand, capacity, travel_cost, opening_cost, travel_cost_matrix = instance.demand, instance.capacity, instance.travel_cost, instance.opening_cost, instance.travel_cost_matrix
     start_time = time.process_time()
+    # Counters for tabu moves
     tabu_count = 0
+    non_tabu_count = 0
     xbar, ybar = copy.deepcopy(x), y.copy()
     best_x, best_y = copy.deepcopy(x), y.copy()
     best_obj = compute_obj_value(xbar, ybar)
+    # Set of past result for Tabu Search
     past_results = set()
-    non_tabu_count = 0
     default_probability = 0.9
+    # Epsilon parameter for evolving probability
     eps = default_probability
+    # Epsilon decay factor that multiplies epsilon
     eps_decay = 0.9
     random.seed(6)
+    # Number of times we did not improve, split in two variables
+    # because we have two different thresholds to reset
     stuck = 0
     no_improve = 0
+    # Counter for logging purposes
     facility_moves, assignment_moves = 0, 0
-    while time.process_time() - start_time < 30*60:
+    while time.process_time() - start_time < time_limit:
         if random.random() < eps:
+            # with eps probability, we make an assignment movement
             xbar_test, ybar_test = assignment_movement(
                 xbar.copy(), ybar.copy())
             assignment_moves += 1
         else:
+            # with 1 - eps probability, we make a facility movement
             xbar_test, ybar_test = facility_movement(
                 xbar.copy(), ybar.copy(), travel_cost_matrix)
             facility_moves += 1
+        # check that solution has not been explored before
         if (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)) not in past_results:
+            # remember solution for later checks
             past_results.add(
                 (tuple([tuple(i) for i in xbar_test]), tuple(ybar_test)))
             obj_bar = compute_obj_value(xbar_test, ybar_test)
             if obj_bar < best_obj:
                 no_improve = 0
+                # new best solution is the current solution
                 best_x, best_y = copy.deepcopy(xbar_test), ybar_test.copy()
+                # next starting point is the current solution
                 xbar, ybar = copy.deepcopy(xbar_test), ybar_test.copy()
+                # update best objective value
                 best_obj = obj_bar
             else:
                 no_improve += 1
                 if no_improve > 2000:
+                    # next starting point is the current solution
                     xbar, ybar = copy.deepcopy(
                         xbar_test), copy.deepcopy(ybar_test)
                     no_improve = 0
                 stuck += 1
                 if stuck > 5:
+                    # reset probability
                     eps = default_probability
                     stuck = 0
             non_tabu_count += 1
         else:
             tabu_count += 1
+        # decrease epsilon at every move
         eps *= eps_decay
-    #print(f"Facility moves : {facility_moves}")
-    #print(f"Assignment moves : {assignment_moves}")
-    #print("Tabu :", tabu_count)
-    #print("Non tabu :", non_tabu_count)
+    print(f"Facility moves : {facility_moves}")
+    print(f"Assignment moves : {assignment_moves}")
+    print("Tabu solutions encountered :", tabu_count)
+    print("Non tabu solutions encountered :", non_tabu_count)
     return best_obj, best_x, best_y
 
 
-def assignment_movement(x, y):
+def assignment_movement(x: list[list], y: list) -> tuple[list[list], list]:
+    """
+    Performs an assignment movement.
+
+    :param x: x value to move from
+    :param y: y value to move from
+    :return: new x,y solution pair
+    """
+    global instance
+    assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     xbar, ybar = copy.deepcopy(x), copy.deepcopy(y)
     demand, capacity, travel_cost = instance.demand, instance.capacity, instance.travel_cost_matrix
     nb_customers = random.randint(1, 2)
@@ -295,7 +340,7 @@ def assignment_movement(x, y):
                 while remaining_demand != 0 and len(opened_facilities) > 0:
                     if random.random() < 0.5:
                         opened_facilities_weights = [
-                            1/travel_cost[d[0]][i] for i in opened_facilities]
+                            1 / travel_cost[d[0]][i] for i in opened_facilities]
                         new_facility = random.choices(
                             opened_facilities, weights=opened_facilities_weights, k=1)
                     else:
@@ -314,7 +359,17 @@ def assignment_movement(x, y):
     return xbar, ybar
 
 
-def facility_movement(x, y, travel_cost):
+def facility_movement(x: list[list], y: list, travel_cost: list[list[int]]) -> Optional[tuple[list[list], list]]:
+    """
+    Performs a facility movement.
+
+    :param x: x value to move from
+    :param y: y value to move from
+    :param travel_cost: travel cost matrix
+    :return: new x,y solution pair
+    """
+    global instance
+    assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     demand, capacity, opening_cost = instance.demand, instance.capacity, instance.opening_cost
     openable_facilities = [i for i in range(len(y)) if y[i] == 0]
     closable_facilities = [i for i in range(len(y)) if y[i] == 1]
@@ -370,10 +425,12 @@ def facility_movement(x, y, travel_cost):
 
 
 def check_validity(x, y):
+    global instance
+    assert instance is not None, "Instance is None. Make sure to initialize it with solve_flp."
     demand, capacity = instance.demand, instance.capacity
     for j in range(len(x[0])):
         capacity_constraint = sum(x[k][j] for k in range(len(x)))
-        if capacity_constraint > capacity[j]*y[j]:
+        if capacity_constraint > capacity[j] * y[j]:
             return False
     for i in range(len(x)):
         demand_constraint = sum(x[i][l] for l in range(len(x[i])))
@@ -381,26 +438,25 @@ def check_validity(x, y):
             return False
     return True
 
-
 # if __name__ == "__main__":
-    # print(read_instance("FLP-100-20-0.txt"))
-    # if len(sys.argv) != 3:
-    #     print("Usage: flp.py <filename> <solving option>")
-    #     exit(1)
-    # obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
-    # print(y)
+# print(read_instance("FLP-100-20-0.txt"))
+# if len(sys.argv) != 3:
+#     print("Usage: flp.py <filename> <solving option>")
+#     exit(1)
+# obj, x, y = solve_flp(sys.argv[1], sys.argv[2] == "--lp")
+# print(y)
 
-    # Global variable corresponding to the instance
-    # instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
-    #                      "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
-    # output_file = open("algo_measures.csv", "w")
-    # output_file.write("instance,solution\n")
-    # for i in instances_to_test:
-    #     instance = Instance(i)
+# Global variable corresponding to the instance
+# instances_to_test = ["FLP-250-50-0.txt", "FLP-250-50-1.txt", "FLP-250-50-2.txt",
+#                      "FLP-200-40-0.txt", "FLP-200-40-1.txt", "FLP-200-40-2.txt", "FLP-150-45-2.txt", "FLP-150-30-0.txt", "FLP-150-30-1.txt", "FLP-150-30-2.txt"]
+# output_file = open("algo_measures.csv", "w")
+# output_file.write("instance,solution\n")
+# for i in instances_to_test:
+#     instance = Instance(i)
 
-    #     obj, x, y = initial_solution_flp(i)
-    #     obj_sol, x_sol, y_sol = local_search_flp(x, y)
-    #     print("Solution :", obj_sol)
-    #     print("Valid :", check_validity(x_sol, y_sol))
-    #     output_file.write(i + "," + str(obj_sol) + "\n")
-    # output_file.close()
+#     obj, x, y = initial_solution_flp(i)
+#     obj_sol, x_sol, y_sol = local_search_flp(x, y)
+#     print("Solution :", obj_sol)
+#     print("Valid :", check_validity(x_sol, y_sol))
+#     output_file.write(i + "," + str(obj_sol) + "\n")
+# output_file.close()
